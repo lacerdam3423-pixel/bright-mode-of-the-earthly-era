@@ -1,85 +1,75 @@
--- BRIGHT MODE MOTO E40 (ECONOMIA EXTREMA - ZERO LAG)
+-- BRIGHT MODE ULTRA UNIVERSAL (ZERO LAG - TODOS OS JOGOS)
 local Lighting = game:GetService("Lighting")
 local TweenService = game:GetService("TweenService")
 
--- 1. CONFIGURAÇÃO GLOBAL (NÃO PESA NO CELULAR)
-local function AjustarGlobal()
+-- 1. CONFIGURAÇÃO DE CLIMA (LAVADO E SEM SOMBRAS)
+local function ConfigurarLuz()
     Lighting.Brightness = 0
     Lighting.GlobalShadows = false
     Lighting.Ambient = Color3.new(1, 1, 1)
     Lighting.OutdoorAmbient = Color3.new(1, 1, 1)
-    Lighting.FogEnd = 999999
+    Lighting.FogEnd = 100000
+    Lighting.FogStart = 0
     
-    -- Remove efeitos pesados que travam celulares básicos
     local atmos = Lighting:FindFirstChildOfClass("Atmosphere")
     if atmos then atmos:Destroy() end
 end
 
--- 2. TRANSIÇÃO SUAVE (2 SEGUNDOS)
-local function Suavizar(alvo)
-    TweenService:Create(Lighting, TweenInfo.new(2), {ExposureCompensation = alvo}):Play()
+-- 2. TRANSIÇÃO SUAVE
+local function mudarClima(valorExposicao)
+    local info = TweenInfo.new(2, Enum.EasingStyle.Linear)
+    TweenService:Create(Lighting, info, {ExposureCompensation = valorExposicao}):Play()
 end
 
-local function Ciclo()
-    if Lighting.ClockTime >= 6 and Lighting.ClockTime <= 18 then
-        Suavizar(0.5) -- Dia
+local function atualizarCiclo()
+    local hora = Lighting.ClockTime
+    if hora >= 6 and hora <= 18 then
+        mudarClima(0.5)
     else
-        Suavizar(0.8) -- Noite
+        mudarClima(0.8)
     end
 end
 
--- 3. AJUSTE DE OBJETOS (VERSÃO ULTRA LEVE)
-local function AplicarAjuste(obj)
-    -- Desativa luzes dinâmicas (isso economiza muita bateria e FPS)
-    if obj:IsA("Light") then
-        obj.Enabled = false
-    end
-    
+-- 3. FUNÇÃO DE AJUSTE (FIEL ÀS SUAS REGRAS)
+local function ajustarObjeto(obj)
     if obj:IsA("BasePart") then
-        obj.CastShadow = false -- Remove sombra (FPS Boost)
-        
-        -- Só muda se for estritamente necessário
+        -- Neon vira Ice
         if obj.Material == Enum.Material.Neon then
             obj.Material = Enum.Material.Ice
         end
-        
-        -- Objetos invisíveis ficam 0.8 como pedido
+        -- Invisível (1) vira 0.7
         if obj.Transparency >= 0.98 then
-            obj.Transparency = 0.8
+            obj.Transparency = 0.7
         end
     end
 end
 
--- 4. VARREDURA LENTA PARA MOTO E40 (NÃO TRAVA)
-AjustarGlobal()
-
+-- 4. VARREDURA INICIAL OTIMIZADA (SÓ RODA UMA VEZ)
+ConfigurarLuz()
 task.spawn(function()
     local itens = workspace:GetDescendants()
     for i = 1, #itens do
-        local ok, err = pcall(function()
-            AplicarAjuste(itens[i])
-        end)
-        
-        -- Pausa a cada 50 itens para o Moto E40 respirar
-        if i % 50 == 0 then 
-            task.wait(0.05) 
-        end
+        pcall(ajustarObjeto, itens[i])
+        -- Pausa para o Moto E40 respirar
+        if i % 80 == 0 then task.wait() end
     end
 end)
 
--- Monitora novos itens sem pesar
+-- 5. MONITORAMENTO DE NOVOS OBJETOS (UNIVERSAL)
+-- Isso evita que o script precise ler o mapa todo a cada segundo
 workspace.DescendantAdded:Connect(function(obj)
-    task.wait(0.1) -- Espera um pouco antes de ajustar para evitar picos de lag
-    AplicarAjuste(obj)
+    pcall(ajustarObjeto, obj)
 end)
 
--- 5. MANUTENÇÃO LEVE (A CADA 3 SEGUNDOS)
+-- 6. LOOP DE MANUTENÇÃO LEVE (CADA 1 SEGUNDO)
+Lighting:GetPropertyChangedSignal("ClockTime"):Connect(atualizarCiclo)
+atualizarCiclo()
+
 task.spawn(function()
     while true do
-        AjustarGlobal()
-        Ciclo()
-        task.wait(3) -- Aumentado para 3 segundos para máxima performance
+        ConfigurarLuz() -- Mantém a luz sem neblina
+        task.wait(1)
     end
 end)
 
-print("Bright Mode Moto E40: Ativado com foco em FPS!")
+print("Bright Mode Universal: Roda Liso em qualquer jogo!")
