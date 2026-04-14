@@ -1,40 +1,58 @@
--- BRIGHT MODE ULTRA UNIVERSAL (ZERO LAG - TODOS OS JOGOS)
+-- Script Profissional: Permanent Ultra Bright & Performance
+-- Configurações fixas: Sem Botão, Sem Lag, Brilho Máximo
+
 local Lighting = game:GetService("Lighting")
-local TweenService = game:GetService("TweenService")
+local Workspace = game:GetService("Workspace")
 
--- 1. CONFIGURAÇÃO DE CLIMA (LAVADO E SEM SOMBRAS)
-local function ConfigurarLuz()
+-- 1. Configuração de Iluminação Fixa
+local function ApplyPermanentBright()
+    -- Aplica os valores solicitados
     Lighting.Brightness = 0
-    Lighting.GlobalShadows = false
-    Lighting.Ambient = Color3.new(1, 1, 1)
-    Lighting.OutdoorAmbient = Color3.new(1, 1, 1)
-    Lighting.FogEnd = 100000
-    Lighting.FogStart = 0
+    Lighting.ExposureCompensation = 0.5
     
-    local atmos = Lighting:FindFirstChildOfClass("Atmosphere")
-    if atmos then atmos:Destroy() end
-end
-
--- 2. TRANSIÇÃO SUAVE
-local function mudarClima(valorExposicao)
-    local info = TweenInfo.new(2, Enum.EasingStyle.Linear)
-    TweenService:Create(Lighting, info, {ExposureCompensation = valorExposicao}):Play()
-end
-
-local function atualizarCiclo()
-    local hora = Lighting.ClockTime
-    if hora >= 6 and hora <= 18 then
-        mudarClima(0.5)
-    else
-        mudarClima(0.8)
+    -- Força o estado de "Dia Eterno" e remove sombras
+    Lighting.ClockTime = 12
+    Lighting.GlobalShadows = false
+    Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+    Lighting.Ambient = Color3.fromRGB(255, 255, 255)
+    
+    -- Remove efeitos de pós-processamento (Bloom/Blur)
+    for _, effect in pairs(Lighting:GetChildren()) do
+        if effect:IsA("BloomEffect") or effect:IsA("BlurEffect") or effect:IsA("DepthOfFieldEffect") then
+            effect.Enabled = false
+        end
     end
 end
 
--- 3. FUNÇÃO DE AJUSTE (FIEL ÀS SUAS REGRAS)
-local function ajustarObjeto(obj)
-    if obj:IsA("BasePart") then
-        -- Neon vira Ice
-        if obj.Material == Enum.Material.Neon then
+-- 2. Otimização de Materiais e Peças
+local function OptimizeWorld()
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        if obj:IsA("BasePart") then
+            -- Desativa sombras individuais para ganho de FPS
+            obj.CastShadow = false
+            
+            -- Transforma Neon em Metal
+            if obj.Material == Enum.Material.Neon then
+                obj.Material = Enum.Material.Metal
+            end
+        end
+    end
+end
+
+-- 3. Proteção Anti-Mudança (Mantém o brilho se o jogo tentar mudar)
+Lighting:GetPropertyChangedSignal("ClockTime"):Connect(function()
+    Lighting.ClockTime = 12
+end)
+
+Lighting:GetPropertyChangedSignal("GlobalShadows"):Connect(function()
+    Lighting.GlobalShadows = false
+end)
+
+-- Execução Única e Direta
+ApplyPermanentBright()
+OptimizeWorld()
+
+print("Bright Mode Permanente Ativado. Sistema de botão removido.")        if obj.Material == Enum.Material.Neon then
             obj.Material = Enum.Material.Ice
         end
         -- Invisível (1) vira 0.7
