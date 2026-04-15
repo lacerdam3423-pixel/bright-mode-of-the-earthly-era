@@ -27,8 +27,8 @@ local function setLighting()
 	Lighting.GlobalShadows = false
 	Lighting.Brightness = 0.0
 
-	Lighting.Ambient = Color3.fromRGB(255,255,255)
-	Lighting.OutdoorAmbient = Color3.fromRGB(255,255,255)
+	Lighting.Ambient = Color3.fromRGB(200,200,200)
+	Lighting.OutdoorAmbient = Color3.fromRGB(200,200,200)
 
 	Lighting.ColorShift_Top = Color3.new(0,0,0)
 	Lighting.ColorShift_Bottom = Color3.new(0,0,0)
