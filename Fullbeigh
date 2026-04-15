@@ -1,130 +1,106 @@
---// ULTRA BRIGHT + NOFOG (HEARTBEAT VERSION)
---// Sem interferir em Textures/Decals
---// Ultra leve | Reaplicação inteligente | Mobile OK
-
-local Lighting = game:GetService("Lighting")
-local Workspace = game:GetService("Workspace")
-local RunService = game:GetService("RunService")
-
 --// CONFIG
-local CONFIG = {
-	ExposureDay = 0.0,
-	ExposureNight = 0.0,
-	FPSCap = 200,
-	RenderDistance = 1000
+local config = {
+	Brightness = 0,
+	AmbientColor = Color3.fromRGB(200, 200, 200),
+	OutdoorAmbient = Color3.fromRGB(180, 180, 180),
+
+	DayExposure = 0,
+	NightExposure = 0,
+
+	ForceWhiteFromBlack = true,
+	ConvertNeon = true,
+	RemoveShadows = true,
+	DisableLights = true,
+	AdjustTransparency = true,
+	SmoothLighting = false
 }
 
---// FPS CAP
-pcall(function()
-	setfpscap(CONFIG.FPSCap)
-end)
+--// SERVICES
+local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
 
---// BASE LIGHT (SEM TEXTURAS)
-local function applyBaseLighting()
-	Lighting.GlobalShadows = false
-	Lighting.Brightness = 0
+--// BASE LIGHTING SETUP
+Lighting.Brightness = config.Brightness
+Lighting.GlobalShadows = false
+Lighting.FogEnd = 1000000
+Lighting.FogStart = 1000000
+Lighting.FogColor = Color3.new(1,1,1)
+Lighting.Ambient = config.AmbientColor
+Lighting.OutdoorAmbient = config.OutdoorAmbient
 
-	Lighting.Ambient = Color3.fromRGB(255,255,255)
-	Lighting.OutdoorAmbient = Color3.fromRGB(255,255,255)
-
-	Lighting.EnvironmentDiffuseScale = 0
-	Lighting.EnvironmentSpecularScale = 0
-
-	Lighting.ColorShift_Top = Color3.new(0,0,0)
-	Lighting.ColorShift_Bottom = Color3.new(0,0,0)
-
-	Lighting.Technology = Enum.Technology.Compatibility
+-- Remove efeitos
+for _, v in ipairs(Lighting:GetChildren()) do
+	if v:IsA("PostEffect") then
+		v:Destroy()
+	end
 end
 
---// EXPOSURE DINÂMICO (SEM CLOCK FIXO)
-local function applyExposure()
+--// FUNÇÃO DE AJUSTE DE PARTES
+local function processPart(part)
+	if not part:IsA("BasePart") then return end
+
+	-- Remover sombras
+	if config.RemoveShadows then
+		part.CastShadow = false
+	end
+
+	-- Converter Neon
+	if config.ConvertNeon and part.Material == Enum.Material.Neon then
+		part.Material = Enum.Material.SmoothPlastic
+	end
+
+	-- Ajustar transparência
+	if config.AdjustTransparency and part.Transparency >= 1 then
+		part.Transparency = 0.95
+	end
+
+	-- Converter preto para cinza claro
+	if config.ForceWhiteFromBlack then
+		local c = part.Color
+		if c.R < 0.1 and c.G < 0.1 and c.B < 0.1 then
+			part.Color = Color3.fromRGB(180,180,180)
+		end
+	end
+end
+
+--// REMOVER LUZES DINÂMICAS
+local function disableLights(obj)
+	if not config.DisableLights then return end
+
+	if obj:IsA("PointLight") 
+	or obj:IsA("SpotLight") 
+	or obj:IsA("SurfaceLight") then
+		obj.Enabled = false
+	end
+end
+
+--// LOOP INICIAL
+for _, obj in ipairs(workspace:GetDescendants()) do
+	processPart(obj)
+	disableLights(obj)
+end
+
+--// NOVOS OBJETOS
+workspace.DescendantAdded:Connect(function(obj)
+	task.wait()
+	processPart(obj)
+	disableLights(obj)
+end)
+
+--// SISTEMA DAY/NIGHT (sem travar ClockTime)
+RunService.RenderStepped:Connect(function()
 	local time = Lighting.ClockTime
-	if time >= 6 and time < 18 then
-		Lighting.ExposureCompensation = CONFIG.ExposureDay
+
+	if time >= 6 and time <= 18 then
+		Lighting.ExposureCompensation = config.DayExposure
 	else
-		Lighting.ExposureCompensation = CONFIG.ExposureNight
-	end
-end
-
---// NO FOG (INVISÍVEL, NÃO REMOVE)
-local function applyNoFog()
-	Lighting.FogStart = 0
-	Lighting.FogEnd = 1e10
-
-	local atmo = Lighting:FindFirstChildOfClass("Atmosphere")
-	if atmo then
-		atmo.Density = 0
-		atmo.Haze = 0
-		atmo.Glare = 0
-	end
-end
-
---// REMOVE EFEITOS PESADOS
-local function removeEffects()
-	for _, v in ipairs(Lighting:GetDescendants()) do
-		if v:IsA("BloomEffect")
-		or v:IsA("BlurEffect")
-		or v:IsA("SunRaysEffect")
-		or v:IsA("ColorCorrectionEffect")
-		or v:IsA("DepthOfFieldEffect") then
-			v:Destroy()
-		end
-	end
-end
-
---// DESATIVA LUZES DO MAPA (SEM TOCAR EM DECALS)
-local function disableLights()
-	for _, v in ipairs(Workspace:GetDescendants()) do
-		if v:IsA("PointLight")
-		or v:IsA("SpotLight")
-		or v:IsA("SurfaceLight") then
-			v.Enabled = false
-		end
-	end
-end
-
---// REMOVE REFLEXOS
-local function removeReflections()
-	pcall(function()
-		Lighting.ReflectionIntensity = 0
-		Lighting.ShadowSoftness = 0
-	end)
-end
-
---// STREAM BOOST
-local function boostStreaming()
-	pcall(function()
-		Workspace.StreamingEnabled = true
-		Workspace.StreamingTargetRadius = CONFIG.RenderDistance
-	end)
-end
-
---// APPLY TOTAL
-local function applyAll()
-	applyBaseLighting()
-	applyExposure()
-	applyNoFog()
-	removeEffects()
-	disableLights()
-	removeReflections()
-	boostStreaming()
-end
-
---// EXECUÇÃO INICIAL
-applyAll()
-
---// HEARTBEAT LOOP (ULTRA ESTÁVEL)
-local accumulator = 0
-RunService.Heartbeat:Connect(function(dt)
-	accumulator += dt
-
-	if accumulator >= 0.2 then -- leve, evita lag
-		accumulator = 0
-		applyAll()
-	else
-		-- só atualiza exposure leve
-		applyExposure()
+		Lighting.ExposureCompensation = config.NightExposure
 	end
 end)
 
-print("✅ Bright + NoFog + AntiLag (Heartbeat) Ativo")
+--// GARANTIA FINAL
+Lighting.EnvironmentDiffuseScale = 0
+Lighting.EnvironmentSpecularScale = 0
+Lighting.ShadowSoftness = 0
+
+print("✔ BrightMode carregado com sucesso")
