@@ -1,0 +1,131 @@
+--// FULL BRIGHT + NOFOG + ANTI LAG (HEARTBEAT VERSION)
+--// Ultra Stable | Mobile Friendly | Auto Reapply | No Texture Loss
+
+local Lighting = game:GetService("Lighting")
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+
+local player = Players.LocalPlayer
+
+--// CONFIG
+local CONFIG = {
+	ExposureDay = 0.3,
+	ExposureNight = 0.6,
+	FPSCap = 200,
+	RenderDistance = 1000,
+	UpdateRate = 0.15 -- equilíbrio perfeito (não pesa)
+}
+
+--// FPS CAP
+pcall(function()
+	setfpscap(CONFIG.FPSCap)
+end)
+
+--// BASE LIGHTING
+local function setLighting()
+	Lighting.GlobalShadows = false
+	Lighting.Brightness = 2
+
+	Lighting.Ambient = Color3.fromRGB(255,255,255)
+	Lighting.OutdoorAmbient = Color3.fromRGB(255,255,255)
+
+	Lighting.ColorShift_Top = Color3.new(0,0,0)
+	Lighting.ColorShift_Bottom = Color3.new(0,0,0)
+
+	Lighting.EnvironmentDiffuseScale = 0
+	Lighting.EnvironmentSpecularScale = 0
+
+	Lighting.Technology = Enum.Technology.Compatibility
+end
+
+--// EXPOSURE DINÂMICO (SEM FIXAR TEMPO)
+local function setExposure()
+	local clock = Lighting.ClockTime
+
+	if clock >= 6 and clock < 18 then
+		Lighting.ExposureCompensation = CONFIG.ExposureDay
+	else
+		Lighting.ExposureCompensation = CONFIG.ExposureNight
+	end
+end
+
+--// NO FOG (INVISÍVEL, NÃO REMOVE)
+local function setNoFog()
+	Lighting.FogStart = 0
+	Lighting.FogEnd = 1e10
+
+	local atm = Lighting:FindFirstChildOfClass("Atmosphere")
+	if atm then
+		atm.Density = 0
+		atm.Haze = 0
+		atm.Glare = 0
+	end
+end
+
+--// REMOVER EFEITOS PESADOS
+local function removeEffects()
+	for _, v in ipairs(Lighting:GetDescendants()) do
+		if v:IsA("BloomEffect")
+		or v:IsA("BlurEffect")
+		or v:IsA("SunRaysEffect")
+		or v:IsA("ColorCorrectionEffect")
+		or v:IsA("DepthOfFieldEffect") then
+			v:Destroy()
+		end
+	end
+end
+
+--// DESATIVAR LUZES DO MAPA
+local function disableLights()
+	for _, v in ipairs(Workspace:GetDescendants()) do
+		if v:IsA("PointLight")
+		or v:IsA("SpotLight")
+		or v:IsA("SurfaceLight") then
+			v.Enabled = false
+		end
+	end
+end
+
+--// REMOVER REFLEXOS / SUAVIZAÇÃO
+local function removeReflections()
+	pcall(function()
+		Lighting.ReflectionIntensity = 0
+		Lighting.ShadowSoftness = 0
+	end)
+end
+
+--// STREAMING / RENDER BOOST
+local function boostRender()
+	pcall(function()
+		Workspace.StreamingEnabled = true
+		Workspace.StreamingTargetRadius = CONFIG.RenderDistance
+	end)
+end
+
+--// FUNÇÃO PRINCIPAL
+local function applyAll()
+	setLighting()
+	setExposure()
+	setNoFog()
+	removeEffects()
+	disableLights()
+	removeReflections()
+	boostRender()
+end
+
+--// EXECUÇÃO INICIAL
+applyAll()
+
+--// HEARTBEAT LOOP (OTIMIZADO)
+local acc = 0
+RunService.Heartbeat:Connect(function(dt)
+	acc += dt
+
+	if acc >= CONFIG.UpdateRate then
+		acc = 0
+		applyAll()
+	end
+end)
+
+print("✅ Full Bright + NoFog + AntiLag (Heartbeat) Ativo")
