@@ -4,8 +4,8 @@ local config = {
 	AmbientColor = Color3.fromRGB(200, 200, 200),
 	OutdoorAmbient = Color3.fromRGB(180, 180, 180),
 
-	DayExposure = 0,
-	NightExposure = 0,
+	DayExposure = 0.2,
+	NightExposure = 0.4,
 
 	ForceWhiteFromBlack = true,
 	ConvertNeon = true,
