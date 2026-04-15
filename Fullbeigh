@@ -10,8 +10,8 @@ local player = Players.LocalPlayer
 
 --// CONFIG
 local CONFIG = {
-	ExposureDay = 0.3,
-	ExposureNight = 0.6,
+	ExposureDay = 0.0,
+	ExposureNight = 0.0,
 	FPSCap = 200,
 	RenderDistance = 1000,
 	UpdateRate = 0.15 -- equilíbrio perfeito (não pesa)
@@ -25,7 +25,7 @@ end)
 --// BASE LIGHTING
 local function setLighting()
 	Lighting.GlobalShadows = false
-	Lighting.Brightness = 2
+	Lighting.Brightness = 0.0
 
 	Lighting.Ambient = Color3.fromRGB(255,255,255)
 	Lighting.OutdoorAmbient = Color3.fromRGB(255,255,255)
