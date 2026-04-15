@@ -1,20 +1,17 @@
---// FULL BRIGHT + NOFOG + ANTI LAG (HEARTBEAT VERSION)
---// Ultra Stable | Mobile Friendly | Auto Reapply | No Texture Loss
+--// ULTRA BRIGHT + NOFOG (HEARTBEAT VERSION)
+--// Sem interferir em Textures/Decals
+--// Ultra leve | Reaplicação inteligente | Mobile OK
 
 local Lighting = game:GetService("Lighting")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
-local Players = game:GetService("Players")
-
-local player = Players.LocalPlayer
 
 --// CONFIG
 local CONFIG = {
 	ExposureDay = 0.0,
 	ExposureNight = 0.0,
 	FPSCap = 200,
-	RenderDistance = 1000,
-	UpdateRate = 0.15 -- equilíbrio perfeito (não pesa)
+	RenderDistance = 1000
 }
 
 --// FPS CAP
@@ -22,28 +19,27 @@ pcall(function()
 	setfpscap(CONFIG.FPSCap)
 end)
 
---// BASE LIGHTING
-local function setLighting()
+--// BASE LIGHT (SEM TEXTURAS)
+local function applyBaseLighting()
 	Lighting.GlobalShadows = false
-	Lighting.Brightness = 0.0
+	Lighting.Brightness = 0
 
-	Lighting.Ambient = Color3.fromRGB(200,200,200)
-	Lighting.OutdoorAmbient = Color3.fromRGB(200,200,200)
-
-	Lighting.ColorShift_Top = Color3.new(0,0,0)
-	Lighting.ColorShift_Bottom = Color3.new(0,0,0)
+	Lighting.Ambient = Color3.fromRGB(255,255,255)
+	Lighting.OutdoorAmbient = Color3.fromRGB(255,255,255)
 
 	Lighting.EnvironmentDiffuseScale = 0
 	Lighting.EnvironmentSpecularScale = 0
 
+	Lighting.ColorShift_Top = Color3.new(0,0,0)
+	Lighting.ColorShift_Bottom = Color3.new(0,0,0)
+
 	Lighting.Technology = Enum.Technology.Compatibility
 end
 
---// EXPOSURE DINÂMICO (SEM FIXAR TEMPO)
-local function setExposure()
-	local clock = Lighting.ClockTime
-
-	if clock >= 6 and clock < 18 then
+--// EXPOSURE DINÂMICO (SEM CLOCK FIXO)
+local function applyExposure()
+	local time = Lighting.ClockTime
+	if time >= 6 and time < 18 then
 		Lighting.ExposureCompensation = CONFIG.ExposureDay
 	else
 		Lighting.ExposureCompensation = CONFIG.ExposureNight
@@ -51,19 +47,19 @@ local function setExposure()
 end
 
 --// NO FOG (INVISÍVEL, NÃO REMOVE)
-local function setNoFog()
+local function applyNoFog()
 	Lighting.FogStart = 0
 	Lighting.FogEnd = 1e10
 
-	local atm = Lighting:FindFirstChildOfClass("Atmosphere")
-	if atm then
-		atm.Density = 0
-		atm.Haze = 0
-		atm.Glare = 0
+	local atmo = Lighting:FindFirstChildOfClass("Atmosphere")
+	if atmo then
+		atmo.Density = 0
+		atmo.Haze = 0
+		atmo.Glare = 0
 	end
 end
 
---// REMOVER EFEITOS PESADOS
+--// REMOVE EFEITOS PESADOS
 local function removeEffects()
 	for _, v in ipairs(Lighting:GetDescendants()) do
 		if v:IsA("BloomEffect")
@@ -76,7 +72,7 @@ local function removeEffects()
 	end
 end
 
---// DESATIVAR LUZES DO MAPA
+--// DESATIVA LUZES DO MAPA (SEM TOCAR EM DECALS)
 local function disableLights()
 	for _, v in ipairs(Workspace:GetDescendants()) do
 		if v:IsA("PointLight")
@@ -87,7 +83,7 @@ local function disableLights()
 	end
 end
 
---// REMOVER REFLEXOS / SUAVIZAÇÃO
+--// REMOVE REFLEXOS
 local function removeReflections()
 	pcall(function()
 		Lighting.ReflectionIntensity = 0
@@ -95,37 +91,40 @@ local function removeReflections()
 	end)
 end
 
---// STREAMING / RENDER BOOST
-local function boostRender()
+--// STREAM BOOST
+local function boostStreaming()
 	pcall(function()
 		Workspace.StreamingEnabled = true
 		Workspace.StreamingTargetRadius = CONFIG.RenderDistance
 	end)
 end
 
---// FUNÇÃO PRINCIPAL
+--// APPLY TOTAL
 local function applyAll()
-	setLighting()
-	setExposure()
-	setNoFog()
+	applyBaseLighting()
+	applyExposure()
+	applyNoFog()
 	removeEffects()
 	disableLights()
 	removeReflections()
-	boostRender()
+	boostStreaming()
 end
 
 --// EXECUÇÃO INICIAL
 applyAll()
 
---// HEARTBEAT LOOP (OTIMIZADO)
-local acc = 0
+--// HEARTBEAT LOOP (ULTRA ESTÁVEL)
+local accumulator = 0
 RunService.Heartbeat:Connect(function(dt)
-	acc += dt
+	accumulator += dt
 
-	if acc >= CONFIG.UpdateRate then
-		acc = 0
+	if accumulator >= 0.2 then -- leve, evita lag
+		accumulator = 0
 		applyAll()
+	else
+		-- só atualiza exposure leve
+		applyExposure()
 	end
 end)
 
-print("✅ Full Bright + NoFog + AntiLag (Heartbeat) Ativo")
+print("✅ Bright + NoFog + AntiLag (Heartbeat) Ativo")
