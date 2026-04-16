@@ -9,9 +9,11 @@ local config = {
 	OutdoorAmbient = Color3.fromRGB(180, 180, 180),
 
 	ConvertBlack = true,
-	BlackToColor = Color3.fromRGB(180,180,180),
+	BlackToColor = Color3.fromRGB(180, 180, 180),
 
 	ConvertNeon = true,
+	ConvertPlastic = true,
+	PlasticMaterial = Enum.Material.SmoothPlastic,
 	NeonMaterial = Enum.Material.SmoothPlastic,
 
 	TransparencyFix = true,
@@ -41,7 +43,7 @@ Lighting.Technology = Enum.Technology.Compatibility
 
 -- Remove efeitos visuais
 if config.DisableEffects then
-	for _,v in pairs(Lighting:GetChildren()) do
+	for _, v in pairs(Lighting:GetChildren()) do
 		if v:IsA("PostEffect") or v:IsA("Atmosphere") or v:IsA("Sky") then
 			v:Destroy()
 		end
@@ -60,36 +62,41 @@ end
 --// AJUSTAR PARTES
 local function fixPart(part)
 	if part:IsA("BasePart") then
-		
+
 		-- remover sombra
 		if config.RemoveShadows then
 			part.CastShadow = false
 		end
-		
+
 		-- converter preto → cinza claro
 		if config.ConvertBlack then
 			if part.Color.R < 0.1 and part.Color.G < 0.1 and part.Color.B < 0.1 then
 				part.Color = config.BlackToColor
 			end
 		end
-		
+
+		-- plastic → smoothplastic
+		if config.ConvertPlastic and part.Material == Enum.Material.Plastic then
+			part.Material = config.PlasticMaterial
+		end
+
 		-- neon → smoothplastic
 		if config.ConvertNeon and part.Material == Enum.Material.Neon then
 			part.Material = config.NeonMaterial
 		end
-		
+
 		-- transparência
 		if config.TransparencyFix then
 			if part.Transparency >= 1 then
 				part.Transparency = config.MaxTransparency
 			end
 		end
-		
+
 	end
 end
 
 --// APLICAR NO MAPA
-for _,obj in pairs(workspace:GetDescendants()) do
+for _, obj in pairs(workspace:GetDescendants()) do
 	disableLights(obj)
 	fixPart(obj)
 end
@@ -104,14 +111,12 @@ end)
 --// EXPOSURE DINÂMICO (SEM CLOCKTIME FIXO)
 RunService.Heartbeat:Connect(function()
 	if config.UseAutoExposure then
-		
-		local time = Lighting.ClockTime -- não fixa, só lê
-		
+		local time = Lighting.ClockTime
+
 		if time >= 6 and time <= 18 then
 			Lighting.ExposureCompensation = config.DayExposure
 		else
 			Lighting.ExposureCompensation = config.NightExposure
 		end
-		
 	end
 end)
