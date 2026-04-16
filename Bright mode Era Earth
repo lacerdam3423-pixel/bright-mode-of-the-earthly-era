@@ -1,55 +1,100 @@
--- Script Profissional: Permanent Ultra Bright & Performance
--- Configurações fixas: Sem Botão, Sem Lag, Brilho Máximo
+--// CONFIG
+local config = {
+	Brightness = 2,
+	AmbientColor = Color3.fromRGB(200, 200, 200),
+	OutdoorAmbient = Color3.fromRGB(180, 180, 180),
 
+	BlackToColor = Color3.fromRGB(180, 180, 180),
+
+	MaxTransparency = 0.95
+}
+
+--// SERVICES
 local Lighting = game:GetService("Lighting")
-local Workspace = game:GetService("Workspace")
 
--- 1. Configuração de Iluminação Fixa
-local function ApplyPermanentBright()
-    -- Aplica os valores solicitados
-    Lighting.Brightness = 0
-    Lighting.ExposureCompensation = 0.5
-    
-    -- Força o estado de "Dia Eterno" e remove sombras
-    Lighting.ClockTime = 12
-    Lighting.GlobalShadows = false
-    Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
-    Lighting.Ambient = Color3.fromRGB(255, 255, 255)
-    
-    -- Remove efeitos de pós-processamento (Bloom/Blur)
-    for _, effect in pairs(Lighting:GetChildren()) do
-        if effect:IsA("BloomEffect") or effect:IsA("BlurEffect") or effect:IsA("DepthOfFieldEffect") then
-            effect.Enabled = false
-        end
-    end
+--// ===== BRIGHT MODE + LOW GRAPHICS =====
+Lighting.Brightness = config.Brightness
+Lighting.GlobalShadows = false
+Lighting.FogEnd = 1000000
+Lighting.FogStart = 1000000
+Lighting.FogColor = Color3.new(1,1,1)
+
+Lighting.Ambient = config.AmbientColor
+Lighting.OutdoorAmbient = config.OutdoorAmbient
+
+Lighting.Technology = Enum.Technology.Compatibility
+
+--// REMOVER TUDO PESADO DO LIGHTING
+for _, v in ipairs(Lighting:GetChildren()) do
+	if v:IsA("PostEffect")
+	or v:IsA("Atmosphere")
+	or v:IsA("Sky")
+	or v:IsA("BloomEffect")
+	or v:IsA("ColorCorrectionEffect")
+	or v:IsA("SunRaysEffect")
+	or v:IsA("DepthOfFieldEffect") then
+		v:Destroy()
+	end
 end
 
--- 2. Otimização de Materiais e Peças
-local function OptimizeWorld()
-    for _, obj in pairs(Workspace:GetDescendants()) do
-        if obj:IsA("BasePart") then
-            -- Desativa sombras individuais para ganho de FPS
-            obj.CastShadow = false
-            
-            -- Transforma Neon em Metal
-            if obj.Material == Enum.Material.Neon then
-                obj.Material = Enum.Material.Metal
-            end
-        end
-    end
+--// FUNÇÃO ULTRA OTIMIZADA
+local function optimize(obj)
+
+	-- LUZES
+	if obj:IsA("PointLight")
+	or obj:IsA("SpotLight")
+	or obj:IsA("SurfaceLight") then
+		obj.Enabled = false
+		return
+	end
+
+	-- PARTES
+	if obj:IsA("BasePart") then
+
+		-- sem sombra
+		obj.CastShadow = false
+
+		-- cor preta -> cinza
+		local c = obj.Color
+		if c.R < 0.1 and c.G < 0.1 and c.B < 0.1 then
+			obj.Color = config.BlackToColor
+		end
+
+		-- materiais leves
+		if obj.Material ~= Enum.Material.SmoothPlastic then
+			obj.Material = Enum.Material.SmoothPlastic
+		end
+
+		-- transparência bugada
+		if obj.Transparency >= 1 then
+			obj.Transparency = config.MaxTransparency
+		end
+	end
+
+	-- TEXTURAS / DECALS (peso grande)
+	if obj:IsA("Decal") or obj:IsA("Texture") then
+		obj:Destroy()
+	end
+
+	-- PARTICLES (muito pesado)
+	if obj:IsA("ParticleEmitter")
+	or obj:IsA("Trail")
+	or obj:IsA("Smoke")
+	or obj:IsA("Fire")
+	or obj:IsA("Sparkles") then
+		obj.Enabled = false
+	end
+
+	-- BEAMS / RAY FX
+	if obj:IsA("Beam") then
+		obj.Enabled = false
+	end
 end
 
--- 3. Proteção Anti-Mudança (Mantém o brilho se o jogo tentar mudar)
-Lighting:GetPropertyChangedSignal("ClockTime"):Connect(function()
-    Lighting.ClockTime = 12
-end)
+--// APLICAR UMA VEZ (sem loop pesado)
+for _, obj in ipairs(workspace:GetDescendants()) do
+	optimize(obj)
+end
 
-Lighting:GetPropertyChangedSignal("GlobalShadows"):Connect(function()
-    Lighting.GlobalShadows = false
-end)
-
--- Execução Única e Direta
-ApplyPermanentBright()
-OptimizeWorld()
-
-print("Bright Mode Permanente Ativado. Sistema de botão removido.")
+--// NOVOS OBJETOS (SEM WAIT LENTO)
+workspace.DescendantAdded:Connect(optimize)
