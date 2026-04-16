@@ -1,106 +1,117 @@
 --// CONFIG
 local config = {
-	Brightness = 0,
+	DayExposure = 0.5,
+	NightExposure = 0.8,
+	UseAutoExposure = true,
+
+	ForceBrightness = 0,
 	AmbientColor = Color3.fromRGB(200, 200, 200),
 	OutdoorAmbient = Color3.fromRGB(180, 180, 180),
 
-	DayExposure = 0.2,
-	NightExposure = 0.4,
+	ConvertBlack = true,
+	BlackToColor = Color3.fromRGB(180,180,180),
 
-	ForceWhiteFromBlack = true,
 	ConvertNeon = true,
+	NeonMaterial = Enum.Material.SmoothPlastic,
+
+	TransparencyFix = true,
+	MaxTransparency = 0.95,
+
 	RemoveShadows = true,
 	DisableLights = true,
-	AdjustTransparency = true,
-	SmoothLighting = false
+	DisableEffects = true
 }
 
 --// SERVICES
 local Lighting = game:GetService("Lighting")
 local RunService = game:GetService("RunService")
 
---// BASE LIGHTING SETUP
-Lighting.Brightness = config.Brightness
+--// LIGHTING BASE
+Lighting.Brightness = config.ForceBrightness
 Lighting.GlobalShadows = false
 Lighting.FogEnd = 1000000
 Lighting.FogStart = 1000000
 Lighting.FogColor = Color3.new(1,1,1)
+
 Lighting.Ambient = config.AmbientColor
 Lighting.OutdoorAmbient = config.OutdoorAmbient
 
--- Remove efeitos
-for _, v in ipairs(Lighting:GetChildren()) do
-	if v:IsA("PostEffect") then
-		v:Destroy()
-	end
-end
+-- Remove tecnologia pesada
+Lighting.Technology = Enum.Technology.Compatibility
 
---// FUNÇÃO DE AJUSTE DE PARTES
-local function processPart(part)
-	if not part:IsA("BasePart") then return end
-
-	-- Remover sombras
-	if config.RemoveShadows then
-		part.CastShadow = false
-	end
-
-	-- Converter Neon
-	if config.ConvertNeon and part.Material == Enum.Material.Neon then
-		part.Material = Enum.Material.SmoothPlastic
-	end
-
-	-- Ajustar transparência
-	if config.AdjustTransparency and part.Transparency >= 1 then
-		part.Transparency = 0.95
-	end
-
-	-- Converter preto para cinza claro
-	if config.ForceWhiteFromBlack then
-		local c = part.Color
-		if c.R < 0.1 and c.G < 0.1 and c.B < 0.1 then
-			part.Color = Color3.fromRGB(180,180,180)
+-- Remove efeitos visuais
+if config.DisableEffects then
+	for _,v in pairs(Lighting:GetChildren()) do
+		if v:IsA("PostEffect") or v:IsA("Atmosphere") or v:IsA("Sky") then
+			v:Destroy()
 		end
 	end
 end
 
---// REMOVER LUZES DINÂMICAS
+--// BLOQUEAR LUZES
 local function disableLights(obj)
-	if not config.DisableLights then return end
-
-	if obj:IsA("PointLight") 
-	or obj:IsA("SpotLight") 
-	or obj:IsA("SurfaceLight") then
-		obj.Enabled = false
+	if config.DisableLights then
+		if obj:IsA("PointLight") or obj:IsA("SpotLight") or obj:IsA("SurfaceLight") then
+			obj.Enabled = false
+		end
 	end
 end
 
---// LOOP INICIAL
-for _, obj in ipairs(workspace:GetDescendants()) do
-	processPart(obj)
-	disableLights(obj)
+--// AJUSTAR PARTES
+local function fixPart(part)
+	if part:IsA("BasePart") then
+		
+		-- remover sombra
+		if config.RemoveShadows then
+			part.CastShadow = false
+		end
+		
+		-- converter preto → cinza claro
+		if config.ConvertBlack then
+			if part.Color.R < 0.1 and part.Color.G < 0.1 and part.Color.B < 0.1 then
+				part.Color = config.BlackToColor
+			end
+		end
+		
+		-- neon → smoothplastic
+		if config.ConvertNeon and part.Material == Enum.Material.Neon then
+			part.Material = config.NeonMaterial
+		end
+		
+		-- transparência
+		if config.TransparencyFix then
+			if part.Transparency >= 1 then
+				part.Transparency = config.MaxTransparency
+			end
+		end
+		
+	end
 end
 
---// NOVOS OBJETOS
+--// APLICAR NO MAPA
+for _,obj in pairs(workspace:GetDescendants()) do
+	disableLights(obj)
+	fixPart(obj)
+end
+
+-- atualizar novos objetos
 workspace.DescendantAdded:Connect(function(obj)
 	task.wait()
-	processPart(obj)
 	disableLights(obj)
+	fixPart(obj)
 end)
 
---// SISTEMA DAY/NIGHT (sem travar ClockTime)
-RunService.RenderStepped:Connect(function()
-	local time = Lighting.ClockTime
-
-	if time >= 6 and time <= 18 then
-		Lighting.ExposureCompensation = config.DayExposure
-	else
-		Lighting.ExposureCompensation = config.NightExposure
+--// EXPOSURE DINÂMICO (SEM CLOCKTIME FIXO)
+RunService.Heartbeat:Connect(function()
+	if config.UseAutoExposure then
+		
+		local time = Lighting.ClockTime -- não fixa, só lê
+		
+		if time >= 6 and time <= 18 then
+			Lighting.ExposureCompensation = config.DayExposure
+		else
+			Lighting.ExposureCompensation = config.NightExposure
+		end
+		
 	end
 end)
-
---// GARANTIA FINAL
-Lighting.EnvironmentDiffuseScale = 0
-Lighting.EnvironmentSpecularScale = 0
-Lighting.ShadowSoftness = 0
-
-print("✔ BrightMode carregado com sucesso")
