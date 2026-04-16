@@ -1,7 +1,7 @@
 --// CONFIG
 local config = {
-	DayExposure = 0.5,
-	NightExposure = 0.8,
+	DayExposure = 0.4,
+	NightExposure = 0.7,
 	UseAutoExposure = true,
 
 	ForceBrightness = 0,
@@ -15,7 +15,7 @@ local config = {
 	NeonMaterial = Enum.Material.SmoothPlastic,
 
 	TransparencyFix = true,
-	MaxTransparency = 0.95,
+	MaxTransparency = 0.85,
 
 	RemoveShadows = true,
 	DisableLights = true,
