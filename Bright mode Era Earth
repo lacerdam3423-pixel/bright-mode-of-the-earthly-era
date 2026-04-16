@@ -1,18 +1,27 @@
 --// CONFIG
 local config = {
-	Brightness = 2,
+	DayExposure = 0.4,
+	NightExposure = 0.7,
+
+	Brightness = 0,
 	AmbientColor = Color3.fromRGB(200, 200, 200),
 	OutdoorAmbient = Color3.fromRGB(180, 180, 180),
 
 	BlackToColor = Color3.fromRGB(180, 180, 180),
-
 	MaxTransparency = 0.95
 }
 
 --// SERVICES
 local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
 
---// ===== BRIGHT MODE + LOW GRAPHICS =====
+--// ===== FPS UNLOCK (máximo possível via cliente) =====
+pcall(function()
+	settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 -- mínimo gráfico
+	settings().Rendering.EditQualityLevel = Enum.QualityLevel.Level01
+end)
+
+--// ===== BRIGHT MODE =====
 Lighting.Brightness = config.Brightness
 Lighting.GlobalShadows = false
 Lighting.FogEnd = 1000000
@@ -21,14 +30,12 @@ Lighting.FogColor = Color3.new(1,1,1)
 
 Lighting.Ambient = config.AmbientColor
 Lighting.OutdoorAmbient = config.OutdoorAmbient
-
 Lighting.Technology = Enum.Technology.Compatibility
 
---// REMOVER TUDO PESADO DO LIGHTING
+--// REMOVER EFEITOS PESADOS (SEM TEXTURAS)
 for _, v in ipairs(Lighting:GetChildren()) do
 	if v:IsA("PostEffect")
 	or v:IsA("Atmosphere")
-	or v:IsA("Sky")
 	or v:IsA("BloomEffect")
 	or v:IsA("ColorCorrectionEffect")
 	or v:IsA("SunRaysEffect")
@@ -37,7 +44,7 @@ for _, v in ipairs(Lighting:GetChildren()) do
 	end
 end
 
---// FUNÇÃO ULTRA OTIMIZADA
+--// OTIMIZAÇÃO LEVE (SEM DESTRUIR TEXTURAS)
 local function optimize(obj)
 
 	-- LUZES
@@ -50,17 +57,15 @@ local function optimize(obj)
 
 	-- PARTES
 	if obj:IsA("BasePart") then
-
-		-- sem sombra
 		obj.CastShadow = false
 
-		-- cor preta -> cinza
+		-- preto → cinza
 		local c = obj.Color
 		if c.R < 0.1 and c.G < 0.1 and c.B < 0.1 then
 			obj.Color = config.BlackToColor
 		end
 
-		-- materiais leves
+		-- material leve
 		if obj.Material ~= Enum.Material.SmoothPlastic then
 			obj.Material = Enum.Material.SmoothPlastic
 		end
@@ -71,30 +76,39 @@ local function optimize(obj)
 		end
 	end
 
-	-- TEXTURAS / DECALS (peso grande)
-	if obj:IsA("Decal") or obj:IsA("Texture") then
-		obj:Destroy()
-	end
-
-	-- PARTICLES (muito pesado)
+	-- PARTICLES (desativar, não destruir)
 	if obj:IsA("ParticleEmitter")
 	or obj:IsA("Trail")
 	or obj:IsA("Smoke")
 	or obj:IsA("Fire")
-	or obj:IsA("Sparkles") then
-		obj.Enabled = false
-	end
-
-	-- BEAMS / RAY FX
-	if obj:IsA("Beam") then
+	or obj:IsA("Sparkles")
+	or obj:IsA("Beam") then
 		obj.Enabled = false
 	end
 end
 
---// APLICAR UMA VEZ (sem loop pesado)
+--// APLICAR UMA VEZ
 for _, obj in ipairs(workspace:GetDescendants()) do
 	optimize(obj)
 end
 
---// NOVOS OBJETOS (SEM WAIT LENTO)
+--// NOVOS OBJETOS (sem wait pesado)
 workspace.DescendantAdded:Connect(optimize)
+
+--// ===== EXPOSURE DIA / NOITE (OTIMIZADO) =====
+local lastState = nil
+
+RunService.Heartbeat:Connect(function()
+	local time = Lighting.ClockTime
+	local isDay = (time >= 6 and time <= 18)
+
+	if isDay ~= lastState then
+		lastState = isDay
+
+		if isDay then
+			Lighting.ExposureCompensation = config.DayExposure
+		else
+			Lighting.ExposureCompensation = config.NightExposure
+		end
+	end
+end)
