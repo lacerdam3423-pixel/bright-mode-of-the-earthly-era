@@ -17,7 +17,7 @@ local config = {
 	NeonMaterial = Enum.Material.SmoothPlastic,
 
 	TransparencyFix = true,
-	MaxTransparency = 0.85,
+	MaxTransparency = 0.95,
 
 	RemoveShadows = true,
 	DisableLights = true,
