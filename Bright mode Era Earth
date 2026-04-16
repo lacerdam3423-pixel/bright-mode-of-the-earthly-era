@@ -1,114 +1,84 @@
---// CONFIG
-local config = {
-	DayExposure = 0.4,
-	NightExposure = 0.7,
-
-	Brightness = 0,
-	AmbientColor = Color3.fromRGB(200, 200, 200),
-	OutdoorAmbient = Color3.fromRGB(180, 180, 180),
-
-	BlackToColor = Color3.fromRGB(180, 180, 180),
-	MaxTransparency = 0.95
-}
-
 --// SERVICES
 local Lighting = game:GetService("Lighting")
 local RunService = game:GetService("RunService")
 
---// ===== FPS UNLOCK (máximo possível via cliente) =====
-pcall(function()
-	settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 -- mínimo gráfico
-	settings().Rendering.EditQualityLevel = Enum.QualityLevel.Level01
-end)
+--// CONFIG
+local config = {
+	DayExposure = 0.0,
+	NightExposure = 0.1,
+	UpdateDelay = 0.1
+}
 
---// ===== BRIGHT MODE =====
-Lighting.Brightness = config.Brightness
-Lighting.GlobalShadows = false
-Lighting.FogEnd = 1000000
-Lighting.FogStart = 1000000
+--// CRIAR OU PEGAR COLORCORRECTION
+local colorCorrection = Lighting:FindFirstChild("BrightMode_CC")
+if not colorCorrection then
+	colorCorrection = Instance.new("ColorCorrectionEffect")
+	colorCorrection.Name = "BrightMode_CC"
+	colorCorrection.Parent = Lighting
+end
+
+--// REMOVER NEVOA
+Lighting.FogEnd = 1e10
+Lighting.FogStart = 1e10
 Lighting.FogColor = Color3.new(1,1,1)
 
-Lighting.Ambient = config.AmbientColor
-Lighting.OutdoorAmbient = config.OutdoorAmbient
-Lighting.Technology = Enum.Technology.Compatibility
+--// ILUMINAÇÃO BASE
+Lighting.Brightness = 3
+Lighting.ClockTime = Lighting.ClockTime -- mantém ciclo
+Lighting.GlobalShadows = false
+Lighting.OutdoorAmbient = Color3.new(1,1,1)
+Lighting.Ambient = Color3.new(1,1,1)
 
---// REMOVER EFEITOS PESADOS (SEM TEXTURAS)
-for _, v in ipairs(Lighting:GetChildren()) do
-	if v:IsA("PostEffect")
-	or v:IsA("Atmosphere")
-	or v:IsA("BloomEffect")
-	or v:IsA("ColorCorrectionEffect")
-	or v:IsA("SunRaysEffect")
-	or v:IsA("DepthOfFieldEffect") then
-		v:Destroy()
-	end
+--// FUNÇÃO DIA/NOITE
+local function isDay()
+	local t = Lighting.ClockTime
+	return t >= 6 and t <= 18
 end
 
---// OTIMIZAÇÃO LEVE (SEM DESTRUIR TEXTURAS)
-local function optimize(obj)
-
-	-- LUZES
-	if obj:IsA("PointLight")
-	or obj:IsA("SpotLight")
-	or obj:IsA("SurfaceLight") then
-		obj.Enabled = false
-		return
-	end
-
-	-- PARTES
+--// OTIMIZAÇÃO: PROCESSAR PARTES
+local function optimizePart(obj)
 	if obj:IsA("BasePart") then
-		obj.CastShadow = false
-
-		-- preto → cinza
-		local c = obj.Color
-		if c.R < 0.1 and c.G < 0.1 and c.B < 0.1 then
-			obj.Color = config.BlackToColor
+		
+		-- PRETO -> BRANCO
+		if obj.Color.r < 0.1 and obj.Color.g < 0.1 and obj.Color.b < 0.1 then
+			obj.Color = Color3.new(1,1,1)
 		end
-
-		-- material leve
-		if obj.Material ~= Enum.Material.SmoothPlastic then
-			obj.Material = Enum.Material.SmoothPlastic
+		
+		-- NEON -> WOOD
+		if obj.Material == Enum.Material.Neon then
+			obj.Material = Enum.Material.Wood
 		end
-
-		-- transparência bugada
-		if obj.Transparency >= 1 then
-			obj.Transparency = config.MaxTransparency
-		end
-	end
-
-	-- PARTICLES (desativar, não destruir)
-	if obj:IsA("ParticleEmitter")
-	or obj:IsA("Trail")
-	or obj:IsA("Smoke")
-	or obj:IsA("Fire")
-	or obj:IsA("Sparkles")
-	or obj:IsA("Beam") then
-		obj.Enabled = false
+		
 	end
 end
 
---// APLICAR UMA VEZ
+--// PROCESSAR EXISTENTES (UMA VEZ)
 for _, obj in ipairs(workspace:GetDescendants()) do
-	optimize(obj)
+	optimizePart(obj)
 end
 
---// NOVOS OBJETOS (sem wait pesado)
-workspace.DescendantAdded:Connect(optimize)
+--// NOVOS OBJETOS
+workspace.DescendantAdded:Connect(function(obj)
+	optimizePart(obj)
+end)
 
---// ===== EXPOSURE DIA / NOITE (OTIMIZADO) =====
-local lastState = nil
-
-RunService.Heartbeat:Connect(function()
-	local time = Lighting.ClockTime
-	local isDay = (time >= 6 and time <= 18)
-
-	if isDay ~= lastState then
-		lastState = isDay
-
-		if isDay then
-			Lighting.ExposureCompensation = config.DayExposure
+--// LOOP PRINCIPAL
+task.spawn(function()
+	while true do
+		
+		-- EXPOSURE DINÂMICO
+		if isDay() then
+			colorCorrection.Brightness = config.DayExposure
 		else
-			Lighting.ExposureCompensation = config.NightExposure
+			colorCorrection.Brightness = config.NightExposure
 		end
+		
+		-- GARANTIR SEM NEVOA
+		Lighting.FogEnd = 1e10
+		
+		-- GARANTIR BRILHO
+		Lighting.Brightness = 0
+		
+		task.wait(config.UpdateDelay)
 	end
 end)
