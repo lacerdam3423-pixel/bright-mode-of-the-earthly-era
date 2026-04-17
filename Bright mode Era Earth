@@ -4,8 +4,8 @@ local RunService = game:GetService("RunService")
 
 --// CONFIG
 local config = {
-	DayExposure = 0.0,
-	NightExposure = 0.1,
+	DayExposure = 0.4,
+	NightExposure = 0.7,
 	UpdateDelay = 0.1
 }
 
