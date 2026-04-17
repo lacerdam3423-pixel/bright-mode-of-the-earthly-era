@@ -23,7 +23,7 @@ Lighting.FogStart = 1e10
 Lighting.FogColor = Color3.new(1,1,1)
 
 --// ILUMINAÇÃO BASE
-Lighting.Brightness = 3
+Lighting.Brightness = 0
 Lighting.ClockTime = Lighting.ClockTime -- mantém ciclo
 Lighting.GlobalShadows = false
 Lighting.OutdoorAmbient = Color3.new(1,1,1)
