@@ -1,122 +1,294 @@
---// CONFIG
-local config = {
-	DayExposure = 0.4,
-	NightExposure = 0.7,
-	UseAutoExposure = true,
+--[[
+    Bright Mode System - AAA Professional Grade
+    Deterministic lighting pipeline with complete override of Roblox default visuals.
+    Zero dynamic lights, zero post-processing, zero atmospheric interference.
+    Exposure-driven illumination with aggressive night boost.
+--]]
 
-	ForceBrightness = 0,
-	AmbientColor = Color3.fromRGB(200, 200, 200),
-	OutdoorAmbient = Color3.fromRGB(180, 180, 180),
-
-	ConvertBlack = true,
-	BlackToColor = Color3.fromRGB(180, 180, 180),
-
-	ConvertNeon = true,
-	ConvertPlastic = true,
-	PlasticMaterial = Enum.Material.SmoothPlastic,
-	NeonMaterial = Enum.Material.SmoothPlastic,
-
-	TransparencyFix = true,
-	MaxTransparency = 0.95,
-
-	RemoveShadows = true,
-	DisableLights = true,
-	DisableEffects = true
-}
-
---// SERVICES
+local Players = game:GetService("Players")
 local Lighting = game:GetService("Lighting")
+local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 
---// LIGHTING BASE
-Lighting.Brightness = config.ForceBrightness
-Lighting.GlobalShadows = false
-Lighting.FogEnd = 1000000
-Lighting.FogStart = 1000000
-Lighting.FogColor = Color3.new(1,1,1)
+local LocalPlayer = Players.LocalPlayer
+local CurrentCamera = workspace.CurrentCamera
 
-Lighting.Ambient = config.AmbientColor
-Lighting.OutdoorAmbient = config.OutdoorAmbient
+-- =============================================================================
+-- CONFIGURATION
+-- =============================================================================
 
--- Remove tecnologia pesada
-Lighting.Technology = Enum.Technology.Compatibility
+local CONFIG = {
+    Brightness = 0.1,
+    GlobalShadows = false,
+    Technology = "Compatibility",
+    ExposureDay = 0.3*
+    ExposureNight = 1.2,
+    DayStart = 6,
+    DayEnd = 18,
+    FogStart = 0,
+    FogEnd = 1e10,
+    FogColor = Color3.new(0.5, 0.5, 0.5),
+    MinLuminance = 0.15,
+    GrayFallback = 0.3,
+}
 
--- Remove efeitos visuais
-if config.DisableEffects then
-	for _, v in pairs(Lighting:GetChildren()) do
-		if v:IsA("PostEffect") or v:IsA("Atmosphere") or v:IsA("Sky") then
-			v:Destroy()
-		end
-	end
+local POST_EFFECT_CLASSES = {
+    "BloomEffect",
+    "BlurEffect",
+    "ColorCorrectionEffect",
+    "SunRaysEffect",
+    "DepthOfFieldEffect",
+    "GlowEffect",
+    "GrainEffect",
+    "RimEffect",
+    "HazeEffect",
+}
+
+-- Cached weak references to avoid re-processing (optional but safe)
+local processedInstances = setmetatable({}, {__mode = "k"})
+
+-- =============================================================================
+-- UTILITY FUNCTIONS
+-- =============================================================================
+
+local function getLuminance(color: Color3): number
+    return 0.2126 * color.R + 0.7152 * color.G + 0.0722 * color.B
 end
 
---// BLOQUEAR LUZES
-local function disableLights(obj)
-	if config.DisableLights then
-		if obj:IsA("PointLight") or obj:IsA("SpotLight") or obj:IsA("SurfaceLight") then
-			obj.Enabled = false
-		end
-	end
+local function normalizeColor(color: Color3): Color3
+    local lum = getLuminance(color)
+    if lum < CONFIG.MinLuminance then
+        local gray = CONFIG.GrayFallback
+        return Color3.new(gray, gray, gray)
+    end
+    return color
 end
 
---// AJUSTAR PARTES
-local function fixPart(part)
-	if part:IsA("BasePart") then
+-- =============================================================================
+-- CORE LIGHTING ENGINE
+-- =============================================================================
 
-		-- remover sombra
-		if config.RemoveShadows then
-			part.CastShadow = false
-		end
-
-		-- converter preto → cinza claro
-		if config.ConvertBlack then
-			if part.Color.R < 0.1 and part.Color.G < 0.1 and part.Color.B < 0.1 then
-				part.Color = config.BlackToColor
-			end
-		end
-
-		-- plastic → smoothplastic
-		if config.ConvertPlastic and part.Material == Enum.Material.Plastic then
-			part.Material = config.PlasticMaterial
-		end
-
-		-- neon → smoothplastic
-		if config.ConvertNeon and part.Material == Enum.Material.Neon then
-			part.Material = config.NeonMaterial
-		end
-
-		-- transparência
-		if config.TransparencyFix then
-			if part.Transparency >= 1 then
-				part.Transparency = config.MaxTransparency
-			end
-		end
-
-	end
+local function applyLightingCore()
+    pcall(function()
+        Lighting.Brightness = CONFIG.Brightness
+        Lighting.GlobalShadows = CONFIG.GlobalShadows
+        if Lighting.Technology ~= nil then
+            Lighting.Technology = Enum.Technology[CONFIG.Technology]
+        end
+        
+        Lighting.FogStart = CONFIG.FogStart
+        Lighting.FogEnd = CONFIG.FogEnd
+        Lighting.FogColor = CONFIG.FogColor
+        
+        local time = Lighting.ClockTime
+        local isDay = time >= CONFIG.DayStart and time < CONFIG.DayEnd
+        Lighting.ExposureCompensation = isDay and CONFIG.ExposureDay or CONFIG.ExposureNight
+    end)
 end
 
---// APLICAR NO MAPA
-for _, obj in pairs(workspace:GetDescendants()) do
-	disableLights(obj)
-	fixPart(obj)
+-- =============================================================================
+-- LIGHT SUPPRESSION ENGINE
+-- =============================================================================
+
+local function suppressDynamicLights(instance: Instance)
+    if instance:IsA("PointLight") or instance:IsA("SpotLight") or instance:IsA("SurfaceLight") then
+        pcall(function()
+            instance.Enabled = false
+            instance:Destroy()
+        end)
+    end
 end
 
--- atualizar novos objetos
-workspace.DescendantAdded:Connect(function(obj)
-	task.wait()
-	disableLights(obj)
-	fixPart(obj)
-end)
+-- =============================================================================
+-- SCREEN EFFECT PURGE SYSTEM
+-- =============================================================================
 
---// EXPOSURE DINÂMICO (SEM CLOCKTIME FIXO)
-RunService.Heartbeat:Connect(function()
-	if config.UseAutoExposure then
-		local time = Lighting.ClockTime
+local function isPostEffect(instance: Instance): boolean
+    for _, className in POST_EFFECT_CLASSES do
+        if instance:IsA(className) then
+            return true
+        end
+    end
+    return false
+end
 
-		if time >= 6 and time <= 18 then
-			Lighting.ExposureCompensation = config.DayExposure
-		else
-			Lighting.ExposureCompensation = config.NightExposure
-		end
-	end
-end)
+local function removeScreenEffectsFromContainer(container: Instance)
+    for _, child in ipairs(container:GetChildren()) do
+        pcall(function()
+            if isPostEffect(child) then
+                if child:IsA("ColorCorrectionEffect") then
+                    child.Enabled = false
+                else
+                    child:Destroy()
+                end
+            end
+        end)
+    end
+end
+
+local function removeScreenEffects()
+    -- Lighting
+    removeScreenEffectsFromContainer(Lighting)
+    
+    -- Current Camera
+    if CurrentCamera then
+        removeScreenEffectsFromContainer(CurrentCamera)
+    end
+    
+    -- PlayerGui (some custom UI effects)
+    local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+    if playerGui then
+        for _, descendant in ipairs(playerGui:GetDescendants()) do
+            pcall(function()
+                if isPostEffect(descendant) then
+                    descendant:Destroy()
+                end
+            end)
+        end
+    end
+end
+
+-- =============================================================================
+-- FOG & ATMOSPHERE NULLIFIER
+-- =============================================================================
+
+local function neutralizeAtmosphere()
+    pcall(function()
+        local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
+        if atmosphere then
+            atmosphere.Density = 0
+            atmosphere.Haze = 0
+            atmosphere.Glare = 0
+        end
+    end)
+end
+
+-- =============================================================================
+-- MATERIAL & COLOR NORMALIZATION
+-- =============================================================================
+
+local function normalizeVisuals(instance: Instance)
+    if not instance:IsA("BasePart") then
+        return
+    end
+    
+    pcall(function()
+        -- Convert Neon to SmoothPlastic
+        if instance.Material == Enum.Material.Neon then
+            instance.Material = Enum.Material.SmoothPlastic
+        end
+        
+        -- Normalize dark colors
+        instance.Color = normalizeColor(instance.Color)
+    end)
+end
+
+-- =============================================================================
+-- VISUAL STABILITY ENFORCER & EXPOSURE DOMINANCE
+-- =============================================================================
+
+local function enforceStability()
+    -- Disable any ambient or shadow maps that could cause flickering
+    pcall(function()
+        Lighting.Ambient = Color3.new(0.5, 0.5, 0.5)
+        Lighting.OutdoorAmbient = Color3.new(0.5, 0.5, 0.5)
+    end)
+end
+
+-- =============================================================================
+-- SELF-HEALING SYSTEM
+-- =============================================================================
+
+local function bindSelfHealing()
+    -- Reapply lighting when critical properties change
+    local signals = {
+        Lighting:GetPropertyChangedSignal("ClockTime"),
+        Lighting:GetPropertyChangedSignal("Brightness"),
+        Lighting:GetPropertyChangedSignal("ExposureCompensation"),
+        Lighting:GetPropertyChangedSignal("GlobalShadows"),
+        Lighting:GetPropertyChangedSignal("FogStart"),
+        Lighting:GetPropertyChangedSignal("FogEnd"),
+        Lighting:GetPropertyChangedSignal("Technology"),
+    }
+    
+    for _, signal in ipairs(signals) do
+        signal:Connect(applyLightingCore)
+    end
+    
+    -- Remove newly added lights or effects
+    Workspace.DescendantAdded:Connect(function(descendant)
+        suppressDynamicLights(descendant)
+        normalizeVisuals(descendant)
+    end)
+    
+    Lighting.ChildAdded:Connect(function(child)
+        pcall(function()
+            if isPostEffect(child) then
+                if child:IsA("ColorCorrectionEffect") then
+                    child.Enabled = false
+                else
+                    child:Destroy()
+                end
+            elseif child:IsA("Atmosphere") then
+                neutralizeAtmosphere()
+            end
+        end)
+    end)
+    
+    if CurrentCamera then
+        CurrentCamera.ChildAdded:Connect(function(child)
+            if isPostEffect(child) then
+                pcall(function() child:Destroy() end)
+            end
+        end)
+    end
+end
+
+-- =============================================================================
+-- STREAMING AWARE INITIAL SCAN
+-- =============================================================================
+
+local function initialScan()
+    task.spawn(function()
+        local descendants = Workspace:GetDescendants()
+        for i = 1, #descendants do
+            local obj = descendants[i]
+            suppressDynamicLights(obj)
+            normalizeVisuals(obj)
+        end
+        
+        -- Also clean any leftover effects in containers
+        removeScreenEffects()
+        neutralizeAtmosphere()
+        enforceStability()
+    end)
+end
+
+-- =============================================================================
+-- MAIN INITIALIZATION
+-- =============================================================================
+
+local function init()
+    applyLightingCore()
+    removeScreenEffects()
+    neutralizeAtmosphere()
+    enforceStability()
+    bindSelfHealing()
+    initialScan()
+    
+    -- Handle camera changes (player respawn or camera swap)
+    workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+        CurrentCamera = workspace.CurrentCamera
+        if CurrentCamera then
+            removeScreenEffectsFromContainer(CurrentCamera)
+            CurrentCamera.ChildAdded:Connect(function(child)
+                if isPostEffect(child) then
+                    pcall(function() child:Destroy() end)
+                end
+            end)
+        end
+    end)
+end
+
+-- Execute
+init()
