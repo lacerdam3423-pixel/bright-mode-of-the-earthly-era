@@ -1,27 +1,14 @@
 --[[
-    Hiper Ultra Super Mega Professional Bright Mode System
-    Inclui: Iluminação determinística, supressão total de efeitos dinâmicos,
-    otimização de performance extrema, estabilização de FPS e aceleração de rede (simulada).
-    Nota: Desbloqueio real de 300 FPS e boost de internet dependem de hardware/sistema operacional.
-    Este script aplica as melhores práticas para maximizar desempenho dentro do Roblox.
+    Bright Mode - Hardware Fraco + Anti-Erros
+    Sistema de iluminação determinística para dispositivos de baixo desempenho.
+    Máxima proteção contra falhas, consumo mínimo de CPU/GPU, sem travamentos.
 --]]
 
-local Players = game:GetService("Players")
 local Lighting = game:GetService("Lighting")
 local Workspace = game:GetService("Workspace")
-local RunService = game:GetService("RunService")
-local UserSettings = UserSettings()
-local GameSettings = UserSettings.GameSettings
-local HttpService = game:GetService("HttpService")
 
-local LocalPlayer = Players.LocalPlayer
-local CurrentCamera = workspace.CurrentCamera
-
--- =============================================================================
--- CONFIGURAÇÃO PRINCIPAL
--- =============================================================================
+-- Configurações leves
 local CONFIG = {
-    -- Iluminação
     Brightness = 0.1,
     GlobalShadows = false,
     Technology = "Compatibility",
@@ -32,56 +19,46 @@ local CONFIG = {
     FogStart = 0,
     FogEnd = 1e10,
     FogColor = Color3.new(0.5, 0.5, 0.5),
-    MinLuminance = 0.15,
-    GrayFallback = 0.3,
-    
-    -- Performance
-    TargetFPS = 300,
-    PhysicsRate = 240,
-    EnableStreaming = true,
-    GraphicsQuality = 1,         -- Máximo desempenho (low-end)
-    DisablePhysicsThrottle = true,
 }
 
-local POST_EFFECT_CLASSES = {
-    "BloomEffect", "BlurEffect", "ColorCorrectionEffect", "SunRaysEffect",
-    "DepthOfFieldEffect", "GlowEffect", "GrainEffect", "RimEffect", "HazeEffect"
+-- Classes a serem removidas
+local LIGHT_TYPES = {
+    "PointLight", "SpotLight", "SurfaceLight"
+}
+local EFFECT_TYPES = {
+    "BloomEffect", "BlurEffect", "SunRaysEffect", "DepthOfFieldEffect",
+    "ColorCorrectionEffect", "GlowEffect", "GrainEffect"
 }
 
--- Cache para evitar reprocessamento
-local processedInstances = setmetatable({}, {__mode = "k"})
+-- Cache fraco para objetos já processados (auto-limpeza)
+local processed = setmetatable({}, {__mode = "k"})
 
--- =============================================================================
--- UTILITÁRIOS
--- =============================================================================
-local function getLuminance(color: Color3): number
-    return 0.2126 * color.R + 0.7152 * color.G + 0.0722 * color.B
-end
+-- Controle de batch
+local batchQueue = {}
+local isBatching = false
+local BATCH_SIZE = 8          -- Menor para hardware fraco
+local BATCH_DELAY = 0.04
 
-local function normalizeColor(color: Color3): Color3
-    local lum = getLuminance(color)
-    if lum < CONFIG.MinLuminance then
-        local gray = CONFIG.GrayFallback
-        return Color3.new(gray, gray, gray)
+-- =====================================================
+-- Execução segura (silencia erros, evita crash)
+-- =====================================================
+local function safeCall(func, ...)
+    local success = pcall(func, ...)
+    if not success then
+        -- Silencia completamente para não poluir consoles nem travar
+        return nil
     end
-    return color
+    return true
 end
 
-local function isPostEffect(instance: Instance): boolean
-    for _, className in POST_EFFECT_CLASSES do
-        if instance:IsA(className) then return true end
-    end
-    return false
-end
-
--- =============================================================================
--- NÚCLEO DE ILUMINAÇÃO (Determinístico)
--- =============================================================================
+-- =====================================================
+-- Núcleo de iluminação (com proteção)
+-- =====================================================
 local function applyLightingCore()
-    pcall(function()
+    safeCall(function()
         Lighting.Brightness = CONFIG.Brightness
         Lighting.GlobalShadows = CONFIG.GlobalShadows
-        if Lighting.Technology ~= nil then
+        if Lighting.Technology then
             Lighting.Technology = Enum.Technology[CONFIG.Technology]
         end
         Lighting.FogStart = CONFIG.FogStart
@@ -89,241 +66,194 @@ local function applyLightingCore()
         Lighting.FogColor = CONFIG.FogColor
         
         local time = Lighting.ClockTime
-        local isDay = time >= CONFIG.DayStart and time < CONFIG.DayEnd
+        local isDay = (time >= CONFIG.DayStart and time < CONFIG.DayEnd)
         Lighting.ExposureCompensation = isDay and CONFIG.ExposureDay or CONFIG.ExposureNight
     end)
 end
 
--- =============================================================================
--- SUPRESSÃO DE LUZES DINÂMICAS
--- =============================================================================
-local function suppressDynamicLights(instance: Instance)
-    if instance:IsA("PointLight") or instance:IsA("SpotLight") or instance:IsA("SurfaceLight") then
-        pcall(function()
-            instance.Enabled = false
-            instance:Destroy()
-        end)
-    end
-end
-
--- =============================================================================
--- REMOÇÃO DE PÓS-EFEITOS
--- =============================================================================
-local function removeScreenEffectsFromContainer(container: Instance)
-    for _, child in ipairs(container:GetChildren()) do
-        pcall(function()
-            if isPostEffect(child) then
-                if child:IsA("ColorCorrectionEffect") then
-                    child.Enabled = false
-                else
-                    child:Destroy()
-                end
-            end
-        end)
-    end
-end
-
-local function removeScreenEffects()
-    removeScreenEffectsFromContainer(Lighting)
-    if CurrentCamera then removeScreenEffectsFromContainer(CurrentCamera) end
-    local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
-    if playerGui then
-        for _, descendant in ipairs(playerGui:GetDescendants()) do
-            if isPostEffect(descendant) then descendant:Destroy() end
+-- =====================================================
+-- Supressão de luzes (PointLight, SpotLight, SurfaceLight)
+-- =====================================================
+local function suppressLight(instance)
+    if processed[instance] then return end
+    for _, className in LIGHT_TYPES do
+        if instance:IsA(className) then
+            safeCall(function()
+                instance.Enabled = false
+                instance:Destroy()
+            end)
+            processed[instance] = true
+            break
         end
     end
 end
 
--- =============================================================================
--- ATMOSFERA ZERADA
--- =============================================================================
-local function neutralizeAtmosphere()
-    local atm = Lighting:FindFirstChildOfClass("Atmosphere")
-    if atm then
-        pcall(function()
+-- =====================================================
+-- Simplificação de materiais (Neon → SmoothPlastic)
+-- =====================================================
+local function simplifyMaterial(instance)
+    if processed[instance] then return end
+    if instance:IsA("BasePart") then
+        safeCall(function()
+            if instance.Material == Enum.Material.Neon then
+                instance.Material = Enum.Material.SmoothPlastic
+            end
+            processed[instance] = true
+        end)
+    end
+end
+
+-- =====================================================
+-- Remoção de efeitos de pós-processamento (container específico)
+-- =====================================================
+local function cleanEffectsIn(container)
+    if not container then return end
+    safeCall(function()
+        for _, child in ipairs(container:GetChildren()) do
+            for _, effectName in EFFECT_TYPES do
+                if child:IsA(effectName) then
+                    if child:IsA("ColorCorrectionEffect") then
+                        child.Enabled = false
+                    else
+                        child:Destroy()
+                    end
+                    break
+                end
+            end
+        end
+    end)
+end
+
+local function cleanAllEffects()
+    cleanEffectsIn(Lighting)
+    if workspace.CurrentCamera then
+        cleanEffectsIn(workspace.CurrentCamera)
+    end
+end
+
+-- =====================================================
+-- Desativação da atmosfera (Fog e Atmosphere)
+-- =====================================================
+local function disableAtmosphere()
+    safeCall(function()
+        local atm = Lighting:FindFirstChildOfClass("Atmosphere")
+        if atm then
             atm.Density = 0
             atm.Haze = 0
             atm.Glare = 0
-        end)
+        end
+    end)
+end
+
+-- =====================================================
+-- Processamento em lote (evita picos de CPU)
+-- =====================================================
+local function processBatch()
+    if #batchQueue == 0 then
+        isBatching = false
+        return
+    end
+    local limit = math.min(BATCH_SIZE, #batchQueue)
+    for i = 1, limit do
+        local obj = batchQueue[i]
+        if obj and obj.Parent then
+            suppressLight(obj)
+            simplifyMaterial(obj)
+        end
+    end
+    for i = 1, limit do
+        table.remove(batchQueue, 1)
+    end
+    if #batchQueue > 0 then
+        task.wait(BATCH_DELAY)
+        processBatch()
+    else
+        isBatching = false
     end
 end
 
--- =============================================================================
--- NORMALIZAÇÃO DE MATERIAIS E CORES
--- =============================================================================
-local function normalizeVisuals(instance: Instance)
-    if not instance:IsA("BasePart") then return end
-    pcall(function()
-        if instance.Material == Enum.Material.Neon then
-            instance.Material = Enum.Material.SmoothPlastic
-        end
-        instance.Color = normalizeColor(instance.Color)
-    end)
-end
-
--- =============================================================================
--- OTIMIZAÇÃO DE PERFORMANCE (FPS + INTERNET BOOST SIMULADO)
--- =============================================================================
-local function applyPerformanceBoost()
-    -- Ajustes de renderização para máximo FPS
-    pcall(function()
-        -- Força o menor nível de qualidade gráfica (melhor performance em mobile)
-        if GameSettings then
-            GameSettings.GraphicsQualityLevel = CONFIG.GraphicsQuality
-            GameSettings.RenderFidelity = Enum.RenderFidelity.Automatic
-        end
-        
-        -- Desativa limitação de FPS interna (não existe no Roblox, mas tenta)
-        -- O verdadeiro unlock de FPS exige modificação do cliente (ex: FPS Unlocker)
-        RunService:SetThrottleFramerateEnabled(false) -- Placeholder, não tem efeito real
-        
-        -- Ajusta física para maior taxa de atualização (pode melhorar responsividade)
-        Workspace:SetAttribute("PhysicsSteppingMethod", "Adaptive")
-        Workspace:SetAttribute("SignalBehavior", "Deferred")
-        
-        -- Aceleração de rede: ajuste de timeout e uso de HttpService otimizado
-        HttpService.HttpTimeout = 5
-    end)
-    
-    -- Estabilizador de FPS: usa o Heartbeat para monitorar e evitar quedas bruscas
-    local lastTime = os.clock()
-    local frameCount = 0
-    RunService.Heartbeat:Connect(function(delta)
-        frameCount = frameCount + 1
-        local now = os.clock()
-        if now - lastTime >= 1 then
-            local currentFPS = frameCount / (now - lastTime)
-            -- Se o FPS estiver muito baixo, tenta reduzir carga (simulação)
-            if currentFPS < 30 then
-                pcall(function()
-                    if GameSettings then
-                        GameSettings.GraphicsQualityLevel = math.min(GameSettings.GraphicsQualityLevel + 1, 10)
-                    end
-                end)
-            end
-            frameCount = 0
-            lastTime = now
-        end
-    end)
-end
-
--- Boost de internet (simulação: prioriza download de assets via Streaming)
-local function applyInternetBoost()
-    task.spawn(function()
-        -- Ajusta Streaming para reduzir latência de carregamento
-        if CONFIG.EnableStreaming then
-            Workspace.StreamingEnabled = true
-            Workspace.StreamingPauseMode = Enum.StreamingPauseMode.Default
-            Workspace.StreamingTargetRadius = 512  -- Carrega mais área de uma vez
-        end
-        
-        -- Pré-carrega assets comuns (texturas, sons) para evitar delays sob demanda
-        local assets = {
-            "rbxasset://textures/particles/sparkles_main.dds",
-            "rbxasset://textures/particles/smoke_main.dds"
-        }
-        for _, url in assets do
-            pcall(function() HttpService:GetAsync(url) end)
-        end
-    end)
-end
-
--- =============================================================================
--- ESTABILIDADE VISUAL (Zero flicker, distorções)
--- =============================================================================
-local function enforceStability()
-    pcall(function()
-        Lighting.Ambient = Color3.new(0.5, 0.5, 0.5)
-        Lighting.OutdoorAmbient = Color3.new(0.5, 0.5, 0.5)
-        Workspace.Gravity = Workspace.Gravity  -- força recálculo
-    end)
-end
-
--- =============================================================================
--- SISTEMA DE AUTO-CURA (Self-Healing)
--- =============================================================================
-local function bindSelfHealing()
-    local signals = {
-        Lighting:GetPropertyChangedSignal("ClockTime"),
-        Lighting:GetPropertyChangedSignal("Brightness"),
-        Lighting:GetPropertyChangedSignal("ExposureCompensation"),
-        Lighting:GetPropertyChangedSignal("GlobalShadows"),
-        Lighting:GetPropertyChangedSignal("FogStart"),
-        Lighting:GetPropertyChangedSignal("FogEnd"),
-    }
-    for _, sig in ipairs(signals) do
-        sig:Connect(applyLightingCore)
+local function queueObject(obj)
+    if not obj then return end
+    batchQueue[#batchQueue + 1] = obj
+    if not isBatching then
+        isBatching = true
+        task.spawn(processBatch)
     end
-    
-    Workspace.DescendantAdded:Connect(function(desc)
-        suppressDynamicLights(desc)
-        normalizeVisuals(desc)
-    end)
-    
-    Lighting.ChildAdded:Connect(function(child)
-        if isPostEffect(child) then
-            if child:IsA("ColorCorrectionEffect") then
-                child.Enabled = false
-            else
-                child:Destroy()
-            end
-        elseif child:IsA("Atmosphere") then
-            neutralizeAtmosphere()
-        end
-    end)
 end
 
--- =============================================================================
--- VARREDURA INICIAL + STREAMING
--- =============================================================================
+-- =====================================================
+-- Varredura inicial (não bloqueante)
+-- =====================================================
 local function initialScan()
-    task.spawn(function()
-        local descendants = Workspace:GetDescendants()
-        for _, obj in ipairs(descendants) do
-            suppressDynamicLights(obj)
-            normalizeVisuals(obj)
+    safeCall(function()
+        local allObjects = Workspace:GetDescendants()
+        for _, obj in ipairs(allObjects) do
+            queueObject(obj)
         end
-        removeScreenEffects()
-        neutralizeAtmosphere()
-        enforceStability()
+    end)
+    cleanAllEffects()
+    disableAtmosphere()
+end
+
+-- =====================================================
+-- Listeners com proteção total
+-- =====================================================
+local function setupListeners()
+    -- Objetos adicionados ao Workspace
+    Workspace.DescendantAdded:Connect(function(instance)
+        if not instance then return end
+        task.defer(function()
+            safeCall(function() suppressLight(instance) end)
+            safeCall(function() simplifyMaterial(instance) end)
+        end)
+    end)
+    
+    -- Novos efeitos adicionados ao Lighting
+    Lighting.ChildAdded:Connect(function(child)
+        if not child then return end
+        task.defer(function()
+            for _, effectName in EFFECT_TYPES do
+                if child:IsA(effectName) then
+                    safeCall(function()
+                        if child:IsA("ColorCorrectionEffect") then
+                            child.Enabled = false
+                        else
+                            child:Destroy()
+                        end
+                    end)
+                    break
+                end
+            end
+            if child:IsA("Atmosphere") then
+                disableAtmosphere()
+            end
+        end)
+    end)
+    
+    -- Auto-cura: se alguma propriedade crítica mudar, reaplica iluminação
+    Lighting:GetPropertyChangedSignal("ClockTime"):Connect(applyLightingCore)
+    Lighting:GetPropertyChangedSignal("Brightness"):Connect(applyLightingCore)
+    Lighting:GetPropertyChangedSignal("ExposureCompensation"):Connect(applyLightingCore)
+    Lighting:GetPropertyChangedSignal("GlobalShadows"):Connect(applyLightingCore)
+    
+    -- Mudança de câmera (limpa efeitos na nova câmera)
+    workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+        local cam = workspace.CurrentCamera
+        if cam then
+            cleanEffectsIn(cam)
+        end
     end)
 end
 
-local function handleStreaming()
-    if CONFIG.EnableStreaming then
-        Workspace.StreamingEnabled = true
-        Workspace.StreamingPauseMode = Enum.StreamingPauseMode.Default
-        Workspace.DescendantAdded:Connect(function(obj)
-            suppressDynamicLights(obj)
-            normalizeVisuals(obj)
-        end)
-    end
-end
-
--- =============================================================================
--- INICIALIZAÇÃO PRINCIPAL (Hiper Profissional)
--- =============================================================================
+-- =====================================================
+-- Inicialização principal
+-- =====================================================
 local function init()
     applyLightingCore()
-    removeScreenEffects()
-    neutralizeAtmosphere()
-    enforceStability()
-    applyPerformanceBoost()
-    applyInternetBoost()
-    bindSelfHealing()
-    handleStreaming()
+    cleanAllEffects()
+    disableAtmosphere()
+    setupListeners()
     initialScan()
-    
-    -- Monitora troca de câmera
-    workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
-        CurrentCamera = workspace.CurrentCamera
-        if CurrentCamera then
-            removeScreenEffectsFromContainer(CurrentCamera)
-        end
-    end)
-    
-    -- Log de ativação (somente para debug)
-    print("Bright Mode Hiper Ultra Super Mega ativado | FPS target: " .. CONFIG.TargetFPS)
 end
 
 init()
