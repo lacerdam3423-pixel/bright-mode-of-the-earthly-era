@@ -16,12 +16,12 @@ local RunService = game:GetService("RunService")
 -- CONFIGURAÇÃO
 -- ========================
 local CONFIG = {
-    Brightness = 0.5,
+    Brightness = 0.1,
     GlobalShadows = false,
     ShadowSoftness = 0,
     Technology = "Compatibility",   -- Melhor para FPS
     ExposureDay = 0.4,              -- Visibilidade diurna limpa
-    ExposureNight = 0.9,            -- Noite bem iluminada
+    ExposureNight = 1.2,            -- Noite bem iluminada
     DayStart = 6,
     DayEnd = 18,
     FogStart = 0,
