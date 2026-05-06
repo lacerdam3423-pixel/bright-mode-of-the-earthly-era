@@ -16,7 +16,7 @@ local RunService = game:GetService("RunService")
 -- CONFIGURAÇÃO
 -- ========================
 local CONFIG = {
-    Brightness = 0.1,
+    Brightness = 0.5,
     GlobalShadows = false,
     ShadowSoftness = 0,
     Technology = "Compatibility",   -- Melhor para FPS
